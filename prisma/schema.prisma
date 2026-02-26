@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String              @id @default(uuid())
+  name                   String              @db.VarChar(255)
+  email                  String              @unique @db.VarChar(255)
+  phone                  String              @unique @db.VarChar(20)
+  postalCode             String?             @map("postal_code") @db.VarChar(10)
+  passwordHash           String              @map("password_hash")
+  isVerified             Boolean             @default(false) @map("is_verified")
+  scribeCoins            Int                 @default(0) @map("scribe_coins")
+  isAdmin                Boolean             @default(false) @map("is_admin")
+  isSuperAdmin           Boolean             @default(false) @map("is_super_admin")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  recoveryToken          String?             @map("recovery_token") @db.VarChar(500)
+  recoveryTokenExpiresAt DateTime?           @map("recovery_token_expires_at")
+  verificationToken          String?         @map("verification_token") @db.VarChar(500)
+  verificationTokenExpiresAt DateTime?       @map("verification_token_expires_at")
+  tickets                Ticket[]
+  gameLogs               GameLog[]
+  prizeRedemptions       PrizeRedemption[]
+}
+
+model GameConfig {
+  id        Int      @id @default(autoincrement())
+  config    Json     @db.JsonB
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+}
+
+model Ticket {
+  id          String       @id @default(uuid())
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String       @map("user_id")
+  imageUrl    String       @map("image_url")
+  coinsEarned Int          @map("coins_earned")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  items       TicketItem[]
+
+  @@index([createdAt])
+}
+
+model TicketItem {
+  id       String  @id @default(uuid())
+  ticket   Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticketId String  @map("ticket_id")
+  line     String  @db.VarChar(50)
+  pieces   Int
+  amount   Decimal @db.Decimal(10, 2)
+}
+
+model TicketExport {
+  id           String   @id @default(uuid())
+  status       String   @db.VarChar(20)
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  ticketCount  Int      @default(0) @map("ticket_count")
+  filePath     String?  @map("file_path")
+  errorMessage String?  @map("error_message")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+}
+
+model GameLog {
+  id       String   @id @default(uuid())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String   @map("user_id")
+  gameType String   @map("game_type") @db.VarChar(20)
+  score    Int
+  playedAt DateTime @default(now()) @map("played_at")
+}
+
+model Prize {
+  id             String              @id @default(uuid())
+  title          String              @db.VarChar(255)
+  description    String              @db.Text
+  imageUrl       String?             @map("image_url")
+  pointsRequired Int                 @map("points_required")
+  stock          Int                 @default(0)
+  isActive       Boolean             @default(true) @map("is_active")
+  unlockDate     DateTime?           @map("unlock_date")
+  startDate      DateTime?           @map("start_date")
+  endDate        DateTime?           @map("end_date")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  redemptions    PrizeRedemption[]
+}
+
+model PrizeRedemption {
+  id          String   @id @default(uuid())
+  prize       Prize    @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+  prizeId     String   @map("prize_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String   @map("user_id")
+  pointsSpent Int      @map("points_spent")
+  redeemedAt  DateTime @default(now()) @map("redeemed_at")
+  status      String   @default("pending") @db.VarChar(20)
+
+  @@index([userId])
+  @@index([prizeId])
+}
+
+model WinnersImage {
+  id        String   @id @default(uuid())
+  imageUrl  String   @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("winners_images")
+}
