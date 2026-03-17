@@ -7,44 +7,152 @@ import archiver from 'archiver';
 import path from 'path';
 import type { Prisma } from '@prisma/client';
 
-const formatDateString = (date: Date) => date.toISOString().slice(0, 10);
+const MEXICO_TIME_ZONE = 'America/Mexico_City';
+
+type ResolvedRange = {
+  start: Date;
+  end: Date;
+  startDate: string;
+  endDate: string;
+  label: string;
+  isCustom: boolean;
+};
+
+const getDatePartsInTimeZone = (date: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+
+  const getPart = (type: string) => Number(parts.find((part) => part.type === type)?.value || '0');
+
+  return {
+    year: getPart('year'),
+    month: getPart('month'),
+    day: getPart('day'),
+    hour: getPart('hour'),
+    minute: getPart('minute'),
+    second: getPart('second')
+  };
+};
+
+const formatDateString = (date: Date) => {
+  const { year, month, day } = getDatePartsInTimeZone(date, MEXICO_TIME_ZONE);
+  return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+};
+
+const mexicoDateTimeToUtc = (
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  ms: number
+) => {
+  // Iterative conversion from Mexico local datetime to UTC instant.
+  let guess = new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms));
+  const target = Date.UTC(year, month - 1, day, hour, minute, second, ms);
+
+  for (let i = 0; i < 4; i += 1) {
+    const zoned = getDatePartsInTimeZone(guess, MEXICO_TIME_ZONE);
+    const zonedAsUtc = Date.UTC(
+      zoned.year,
+      zoned.month - 1,
+      zoned.day,
+      zoned.hour,
+      zoned.minute,
+      zoned.second,
+      ms
+    );
+    const diff = target - zonedAsUtc;
+    if (diff === 0) break;
+    guess = new Date(guess.getTime() + diff);
+  }
+
+  return guess;
+};
 
 const parseDateInput = (value: string | undefined, label: string, boundary: 'start' | 'end') => {
   if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw Object.assign(new Error(`Fecha inválida para ${label}`), { status: 400 });
+  }
+
   const [year, month, day] = value.split('-').map((part) => Number(part));
   if (!year || !month || !day) {
     throw Object.assign(new Error(`Fecha inválida para ${label}`), { status: 400 });
   }
+
+  const calendarCheck = new Date(Date.UTC(year, month - 1, day));
+  if (
+    calendarCheck.getUTCFullYear() !== year ||
+    calendarCheck.getUTCMonth() !== (month - 1) ||
+    calendarCheck.getUTCDate() !== day
+  ) {
+    throw Object.assign(new Error(`Fecha inválida para ${label}`), { status: 400 });
+  }
+
   const hours = boundary === 'start' ? 0 : 23;
   const minutes = boundary === 'start' ? 0 : 59;
   const seconds = boundary === 'start' ? 0 : 59;
   const ms = boundary === 'start' ? 0 : 999;
-  const parsed = new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, ms));
+  const parsed = mexicoDateTimeToUtc(year, month, day, hours, minutes, seconds, ms);
   if (Number.isNaN(parsed.getTime())) {
     throw Object.assign(new Error(`Fecha inválida para ${label}`), { status: 400 });
   }
-  return parsed;
+  return { utc: parsed, localDate: value };
 };
 
 const getWeekRange = (weekOffset: number = 0) => {
   const now = new Date();
-  const dayOfWeek = now.getDay();
+  const mexicoNow = getDatePartsInTimeZone(now, MEXICO_TIME_ZONE);
+  const todayAsUtc = new Date(Date.UTC(mexicoNow.year, mexicoNow.month - 1, mexicoNow.day));
+  const dayOfWeek = todayAsUtc.getUTCDay();
   const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-  const start = new Date(now);
-  start.setDate(now.getDate() - daysToMonday + (weekOffset * 7));
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
+
+  const startLocalCalendar = new Date(Date.UTC(mexicoNow.year, mexicoNow.month - 1, mexicoNow.day));
+  startLocalCalendar.setUTCDate(startLocalCalendar.getUTCDate() - daysToMonday + (weekOffset * 7));
+  const endLocalCalendar = new Date(startLocalCalendar);
+  endLocalCalendar.setUTCDate(endLocalCalendar.getUTCDate() + 6);
+
+  const startDate = `${startLocalCalendar.getUTCFullYear().toString().padStart(4, '0')}-${(startLocalCalendar.getUTCMonth() + 1).toString().padStart(2, '0')}-${startLocalCalendar.getUTCDate().toString().padStart(2, '0')}`;
+  const endDate = `${endLocalCalendar.getUTCFullYear().toString().padStart(4, '0')}-${(endLocalCalendar.getUTCMonth() + 1).toString().padStart(2, '0')}-${endLocalCalendar.getUTCDate().toString().padStart(2, '0')}`;
+
+  const start = mexicoDateTimeToUtc(
+    startLocalCalendar.getUTCFullYear(),
+    startLocalCalendar.getUTCMonth() + 1,
+    startLocalCalendar.getUTCDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  const end = mexicoDateTimeToUtc(
+    endLocalCalendar.getUTCFullYear(),
+    endLocalCalendar.getUTCMonth() + 1,
+    endLocalCalendar.getUTCDate(),
+    23,
+    59,
+    59,
+    999
+  );
+
   const label = weekOffset === 0
     ? 'Semana Actual'
     : weekOffset === -1
       ? 'Semana Pasada'
       : `Hace ${Math.abs(weekOffset)} semanas`;
-  return { start, end, label };
+  return { start, end, startDate, endDate, label };
 };
 
-const resolveRange = (params: { startDate?: string; endDate?: string; weekOffset?: number }) => {
+const resolveRange = (params: { startDate?: string; endDate?: string; weekOffset?: number }): ResolvedRange => {
   const hasCustomRange = Boolean(params.startDate || params.endDate);
   if (hasCustomRange) {
     const startDate = parseDateInput(params.startDate || params.endDate, 'inicio', 'start');
@@ -52,19 +160,28 @@ const resolveRange = (params: { startDate?: string; endDate?: string; weekOffset
     if (!startDate || !endDate) {
       throw Object.assign(new Error('Rango de fechas inválido'), { status: 400 });
     }
-    if (startDate > endDate) {
+    if (startDate.utc > endDate.utc) {
       throw Object.assign(new Error('La fecha de inicio no puede ser mayor a la fecha de fin'), { status: 400 });
     }
     return {
-      start: startDate,
-      end: endDate,
-      label: `Del ${formatDateString(startDate)} al ${formatDateString(endDate)}`,
+      start: startDate.utc,
+      end: endDate.utc,
+      startDate: startDate.localDate,
+      endDate: endDate.localDate,
+      label: `Del ${startDate.localDate} al ${endDate.localDate}`,
       isCustom: true
     };
   }
 
   const weekRange = getWeekRange(params.weekOffset || 0);
-  return { start: weekRange.start, end: weekRange.end, label: weekRange.label, isCustom: false };
+  return {
+    start: weekRange.start,
+    end: weekRange.end,
+    startDate: weekRange.startDate,
+    endDate: weekRange.endDate,
+    label: weekRange.label,
+    isCustom: false
+  };
 };
 
 export const getLeaderboard = async (params?: {
@@ -80,6 +197,7 @@ export const getLeaderboard = async (params?: {
     _sum: { score: true },
     _count: { score: true },
     where: {
+      status: 'completed',
       playedAt: {
         gte: startDate,
         lte: endDate
@@ -108,6 +226,40 @@ export const getLeaderboard = async (params?: {
       gamesPlayed: entry._count.score || 0
     };
   });
+};
+
+export const getRegisteredUsers = async (params?: {
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const resolvedRange = resolveRange({ startDate: params?.startDate, endDate: params?.endDate });
+  const users = await prisma.user.findMany({
+    where: {
+      isAdmin: false,
+      isSuperAdmin: false,
+      createdAt: {
+        gte: resolvedRange.start,
+        lte: resolvedRange.end
+      }
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      postalCode: true,
+      createdAt: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+
+  return {
+    users,
+    total: users.length,
+    startDate: resolvedRange.startDate,
+    endDate: resolvedRange.endDate,
+    label: resolvedRange.label
+  };
 };
 
 export const getTicketsWithSignedUrls = async () => {
@@ -332,8 +484,8 @@ export const downloadWeeklyTickets = async (params: {
     return {
       tickets: [],
       count: 0,
-      weekStart: range.start,
-      weekEnd: range.end,
+      weekStart: range.startDate,
+      weekEnd: range.endDate,
       weekLabel: range.label,
       message: 'No se encontraron tickets para el rango seleccionado'
     };
@@ -358,8 +510,8 @@ export const downloadWeeklyTickets = async (params: {
   return {
     tickets: ticketsWithUrls,
     count: ticketsWithUrls.length,
-    weekStart: range.start,
-    weekEnd: range.end,
+    weekStart: range.startDate,
+    weekEnd: range.endDate,
     weekLabel: range.label,
     message: `Se encontraron ${ticketsWithUrls.length} tickets`
   };
@@ -384,7 +536,13 @@ export const deleteWeeklyTickets = async (params: {
   });
 
   if (tickets.length === 0) {
-    return { success: true, count: 0, message: 'No hay tickets para eliminar en el rango seleccionado' };
+    return {
+      success: true,
+      count: 0,
+      weekStart: range.startDate,
+      weekEnd: range.endDate,
+      message: 'No hay tickets para eliminar en el rango seleccionado'
+    };
   }
 
   // Delete all images from GCS
@@ -402,8 +560,8 @@ export const deleteWeeklyTickets = async (params: {
   return {
     success: true,
     count: tickets.length,
-    weekStart: range.start,
-    weekEnd: range.end,
+    weekStart: range.startDate,
+    weekEnd: range.endDate,
     message: `Se eliminaron ${tickets.length} tickets del rango seleccionado`
   };
 };
@@ -414,6 +572,27 @@ type TicketExportRow = any;
 const sanitizeFolderName = (value: string) => {
   const sanitized = value.replace(/[^a-zA-Z0-9]/g, '_').replace(/_+/g, '_');
   return sanitized.replace(/^_+|_+$/g, '') || 'sin_nombre';
+};
+
+const normalizeSearchTerm = (value?: string) => (value || '').trim();
+
+const getTicketSearchUserIds = async (search?: string) => {
+  const normalized = normalizeSearchTerm(search);
+  if (!normalized) return null as string[] | null;
+
+  const users = await prisma.user.findMany({
+    where: {
+      OR: [
+        { name: { contains: normalized, mode: 'insensitive' } },
+        { email: { contains: normalized, mode: 'insensitive' } },
+        { phone: { contains: normalized, mode: 'insensitive' } },
+        { postalCode: { contains: normalized, mode: 'insensitive' } }
+      ]
+    },
+    select: { id: true }
+  });
+
+  return users.map((user) => user.id);
 };
 
 const appendTicketToArchive = async (
@@ -449,7 +628,7 @@ const buildTicketsExportPath = (exportId: string, start: Date, end: Date) => {
   return `exports/tickets/tickets_${formatDateString(start)}_${formatDateString(end)}_${exportId}.zip`;
 };
 
-const processTicketsExport = async (exportId: string) => {
+const processTicketsExport = async (exportId: string, options?: { search?: string }) => {
   const exportJob = await prisma.ticketExport.findUnique({ where: { id: exportId } });
   if (!exportJob) return;
 
@@ -459,13 +638,27 @@ const processTicketsExport = async (exportId: string) => {
   });
 
   try {
+    const searchTerm = normalizeSearchTerm(options?.search);
+    const searchUserIds = await getTicketSearchUserIds(searchTerm);
+
+    if (searchTerm && searchUserIds && searchUserIds.length === 0) {
+      await prisma.ticketExport.update({
+        where: { id: exportId },
+        data: { ticketCount: 0, status: 'completed', filePath: null }
+      });
+      return;
+    }
+
+    const ticketWhere: Prisma.TicketWhereInput = {
+      createdAt: {
+        gte: exportJob.startDate,
+        lte: exportJob.endDate
+      },
+      ...(searchTerm && searchUserIds ? { userId: { in: searchUserIds } } : {})
+    };
+
     const ticketCount = await prisma.ticket.count({
-      where: {
-        createdAt: {
-          gte: exportJob.startDate,
-          lte: exportJob.endDate
-        }
-      }
+      where: ticketWhere
     });
 
     await prisma.ticketExport.update({
@@ -505,10 +698,7 @@ const processTicketsExport = async (exportId: string) => {
         while (true) {
           const tickets: TicketExportRow[] = await prisma.ticket.findMany({
             where: {
-              createdAt: {
-                gte: exportJob.startDate,
-                lte: exportJob.endDate
-              },
+              ...ticketWhere,
               ...(cursorId ? { id: { gt: cursorId } } : {})
             },
             include: {
@@ -557,8 +747,10 @@ const processTicketsExport = async (exportId: string) => {
 export const createTicketsExport = async (params?: {
   startDate?: string;
   endDate?: string;
+  search?: string;
 }) => {
   const range = resolveRange({ startDate: params?.startDate, endDate: params?.endDate });
+  const search = normalizeSearchTerm(params?.search);
   const exportJob = await prisma.ticketExport.create({
     data: {
       status: 'pending',
@@ -568,14 +760,14 @@ export const createTicketsExport = async (params?: {
   });
 
   setImmediate(() => {
-    void processTicketsExport(exportJob.id);
+    void processTicketsExport(exportJob.id, { search });
   });
 
   return {
     exportId: exportJob.id,
     status: exportJob.status,
-    startDate: exportJob.startDate,
-    endDate: exportJob.endDate,
+    startDate: range.startDate,
+    endDate: range.endDate,
     label: range.label
   };
 };
@@ -596,8 +788,8 @@ export const getTicketsExportStatus = async (exportId: string) => {
     id: exportJob.id,
     status: exportJob.status,
     ticketCount: exportJob.ticketCount,
-    startDate: exportJob.startDate,
-    endDate: exportJob.endDate,
+    startDate: formatDateString(exportJob.startDate),
+    endDate: formatDateString(exportJob.endDate),
     downloadUrl,
     errorMessage: exportJob.errorMessage
   };

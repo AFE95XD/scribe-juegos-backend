@@ -27,22 +27,38 @@ export const uploadTicketImage = async (buffer: Buffer, mimetype: string, userNa
   if (!bucket) {
     throw new Error('GCS bucket is not configured');
   }
-  // Format: tickets/{name}_{phone}/ticket_{YYYY-MM-DD}.{ext}
-  // Example: tickets/Juan_Perez_5551234567/ticket_2024-12-17.jpg
+  // Format: tickets/{name}_{phone}/ticket_{YYYY-MM-DD_HH-mm-ss-SSS}.{ext}
+  // Example: tickets/Juan_Perez_5551234567/ticket_2024-12-17_14-35-22-123.jpg
 
   // Sanitize name: remove spaces and special characters, replace with underscores
   const sanitizedName = userName.replace(/[^a-zA-Z0-9]/g, '_');
   const folderName = `${sanitizedName}_${userPhone}`;
 
-  // Get date only (no time)
+  // Use Mexico City timezone to keep file names consistent regardless of server timezone
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
+  const mexicoDateTimeParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(now);
+  const getPart = (type: string) => mexicoDateTimeParts.find((part) => part.type === type)?.value ?? '00';
+
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  const hours = getPart('hour');
+  const minutes = getPart('minute');
+  const seconds = getPart('second');
+  const milliseconds = String(now.getMilliseconds()).padStart(3, '0');
+  const dateTimeStr = `${year}-${month}-${day}_${hours}-${minutes}-${seconds}-${milliseconds}`;
 
   const ext = mimetype.split('/')[1] || 'jpg';
-  const filename = `tickets/${folderName}/ticket_${dateStr}.${ext}`;
+  const filename = `tickets/${folderName}/ticket_${dateTimeStr}.${ext}`;
   const file = bucket.file(filename);
 
   await file.save(buffer, {

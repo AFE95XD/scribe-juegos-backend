@@ -7,6 +7,7 @@ import {
   downloadAndDeleteTicket,
   downloadWeeklyTickets,
   getLeaderboard,
+  getRegisteredUsers,
   getTicketsExportStatus,
   getTicketsWithSignedUrls,
   listAdmins,
@@ -24,6 +25,13 @@ export const leaderboard = async (req: Request, res: Response) => {
 export const listTickets = async (_req: Request, res: Response) => {
   const tickets = await getTicketsWithSignedUrls();
   res.json(tickets);
+};
+
+export const registeredUsers = async (req: Request, res: Response) => {
+  const startDate = req.query.startDate as string | undefined;
+  const endDate = req.query.endDate as string | undefined;
+  const data = await getRegisteredUsers({ startDate, endDate });
+  res.json(data);
 };
 
 export const updateConfig = async (req: AuthRequest, res: Response) => {
@@ -75,8 +83,8 @@ export const deleteWeeklyTicketsController = async (req: Request, res: Response)
 };
 
 export const createTicketsExportController = async (req: Request, res: Response) => {
-  const { startDate, endDate } = req.body || {};
-  const result = await createTicketsExport({ startDate, endDate });
+  const { startDate, endDate, search } = req.body || {};
+  const result = await createTicketsExport({ startDate, endDate, search });
   res.status(202).json(result);
 };
 

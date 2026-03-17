@@ -445,4 +445,5 @@ Para problemas técnicos, contacta al equipo de desarrollo.
 ---
 
 **API desarrollada para la campaña Compra, Juega y Gana** ⚽🇲🇽
-"# scribe-juegos-backend" 
+
+cambio para activar CI/CD

@@ -7,13 +7,14 @@ import {
   downloadTicket,
   downloadWeeklyTicketsController,
   getAdministrators,
+  registeredUsers,
   getTicketsExportStatusController,
   leaderboard,
   listTickets,
   updateConfig
 } from '../controllers/admin.controller';
 import { uploadWinnersImageController } from '../controllers/winners.controller';
-import { requireAdmin, requireAuth } from '../middlewares/authMiddleware';
+import { requireAdmin, requireAuth, requireSuperAdmin } from '../middlewares/authMiddleware';
 import { upload } from '../middlewares/uploadMiddleware';
 import { validateRequest } from '../middlewares/validateRequest';
 import { gameConfigRequestSchema } from '../schemas/game.schema';
@@ -30,7 +31,8 @@ const createAdminSchema = z.object({
 const ticketExportSchema = z.object({
   body: z.object({
     startDate: z.string().optional(),
-    endDate: z.string().optional()
+    endDate: z.string().optional(),
+    search: z.string().optional()
   })
 });
 
@@ -61,6 +63,7 @@ const router = Router();
  *         description: Lista de jugadores con puntaje acumulado
  */
 router.get('/leaderboard', requireAuth, requireAdmin, leaderboard);
+router.get('/registered-users', requireAuth, requireAdmin, registeredUsers);
 
 /**
  * @openapi
@@ -202,7 +205,7 @@ router.delete('/administrators/:id', requireAuth, requireAdmin, deleteAdministra
  *       404:
  *         description: Ticket no encontrado
  */
-router.delete('/tickets/:id/download', requireAuth, requireAdmin, downloadTicket);
+router.delete('/tickets/:id/download', requireAuth, requireSuperAdmin, downloadTicket);
 
 /**
  * @openapi
@@ -266,7 +269,7 @@ router.get('/tickets/download-weekly', requireAuth, requireAdmin, downloadWeekly
  *       200:
  *         description: Tickets eliminados exitosamente
  */
-router.delete('/tickets/delete-weekly', requireAuth, requireAdmin, deleteWeeklyTicketsController);
+router.delete('/tickets/delete-weekly', requireAuth, requireSuperAdmin, deleteWeeklyTicketsController);
 
 /**
  * @openapi

@@ -142,7 +142,7 @@ export class PrizeService {
 
     // Obtener el puntaje total del usuario
     const totalScore = await prisma.gameLog.aggregate({
-      where: { userId },
+      where: { userId, status: 'completed' },
       _sum: { score: true }
     });
 
@@ -174,7 +174,8 @@ export class PrizeService {
         data: {
           userId,
           gameType: 'prize_redemption',
-          score: -prize.pointsRequired // Score negativo para descontar puntos
+          score: -prize.pointsRequired, // Score negativo para descontar puntos
+          status: 'completed'
         }
       });
 

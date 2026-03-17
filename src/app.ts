@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 
 app.use('/api/v1', routes);
-setupSwagger(app);
+// setupSwagger(app);
 
 // Health check endpoint para Dokploy/Google Cloud
 app.get('/health', (req, res) => {

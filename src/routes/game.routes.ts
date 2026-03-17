@@ -2,12 +2,13 @@ import { Router } from "express";
 import {
   fetchConfig,
   start,
+  submitEvent,
   submit,
   totalScore,
 } from "../controllers/game.controller";
 import { requireAuth } from "../middlewares/authMiddleware";
 import { validateRequest } from "../middlewares/validateRequest";
-import { gameScoreSchema, gameStartSchema } from "../schemas/game.schema";
+import { gameEventSchema, gameFinishSchema, gameStartSchema } from "../schemas/game.schema";
 
 const router = Router();
 
@@ -47,9 +48,9 @@ router.post("/start", requireAuth, validateRequest(gameStartSchema), start);
 
 /**
  * @openapi
- * /games/score:
+ * /games/event:
  *   post:
- *     summary: Guardar puntaje de partida
+ *     summary: Registrar evento valido de partida y calcular puntaje en servidor
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -57,14 +58,35 @@ router.post("/start", requireAuth, validateRequest(gameStartSchema), start);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/GameScoreRequest'
+ *             $ref: '#/components/schemas/GameEventRequest'
  *     responses:
  *       200:
- *         description: Puntaje guardado
+ *         description: Evento aceptado y puntaje actualizado
  *       401:
  *         description: No autorizado
  */
-router.post("/score", requireAuth, validateRequest(gameScoreSchema), submit);
+router.post("/event", requireAuth, validateRequest(gameEventSchema), submitEvent);
+
+/**
+ * @openapi
+ * /games/score:
+ *   post:
+ *     summary: Finalizar partida y devolver puntaje calculado por servidor
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GameFinishRequest'
+ *     responses:
+ *       200:
+ *         description: Partida finalizada
+ *       401:
+ *         description: No autorizado
+ */
+router.post("/score", requireAuth, validateRequest(gameFinishSchema), submit);
 
 /**
  * @openapi

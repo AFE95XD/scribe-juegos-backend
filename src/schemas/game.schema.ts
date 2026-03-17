@@ -65,15 +65,41 @@ export const gameConfigRequestSchema = z.object({
   body: gameConfigSchema
 });
 
+const gameTypeSchema = z.enum(['quiz', 'atajagol', 'freestyle', 'freestylepro']);
+
 export const gameStartSchema = z.object({
   body: z.object({
-    gameType: z.enum(['quiz', 'atajagol', 'freestyle', 'freestylepro'])
+    gameType: gameTypeSchema
   })
 });
 
-export const gameScoreSchema = z.object({
+export const gameEventTypeSchema = z.enum([
+  'quiz_correct',
+  'quiz_wrong',
+  'atajagol_small_ball',
+  'atajagol_medium_ball',
+  'atajagol_large_ball',
+  'atajagol_yellow_card',
+  'atajagol_red_card',
+  'freestyle_distance',
+  'freestyle_victory_bonus',
+  'freestylepro_distance',
+  'freestylepro_victory_bonus'
+]);
+
+export const gameEventSchema = z.object({
   body: z.object({
-    gameType: z.enum(['quiz', 'atajagol', 'freestyle', 'freestylepro']),
-    score: z.number().int().nonnegative()
+    gameId: z.string().uuid(),
+    gameType: gameTypeSchema,
+    eventType: gameEventTypeSchema,
+    sequence: z.number().int().positive(),
+    value: z.number().int().min(0).max(10000).optional()
+  })
+});
+
+export const gameFinishSchema = z.object({
+  body: z.object({
+    gameId: z.string().uuid(),
+    gameType: gameTypeSchema
   })
 });

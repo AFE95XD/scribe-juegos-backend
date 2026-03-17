@@ -1,6 +1,27 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma";
 
-type GameType = "quiz" | "atajagol" | "freestyle" | "freestylepro";
+export type GameType = "quiz" | "atajagol" | "freestyle" | "freestylepro";
+export type GameEventType =
+  | "quiz_correct"
+  | "quiz_wrong"
+  | "atajagol_small_ball"
+  | "atajagol_medium_ball"
+  | "atajagol_large_ball"
+  | "atajagol_yellow_card"
+  | "atajagol_red_card"
+  | "freestyle_distance"
+  | "freestyle_victory_bonus"
+  | "freestylepro_distance"
+  | "freestylepro_victory_bonus";
+
+export type RecordGameEventInput = {
+  gameId: string;
+  gameType: GameType;
+  eventType: GameEventType;
+  sequence: number;
+  value?: number;
+};
 
 const cache = {
   config: null as any,
@@ -37,6 +58,34 @@ const DEFAULT_GAME_SCHEDULE: GameScheduleConfig = {
     endAt: "2026-05-31T23:59:59-06:00",
   },
 };
+
+const GAME_SESSION_GRACE_MS = 15_000;
+const QUIZ_MIN_ANSWER_INTERVAL_MS = 500;
+const ATAJAGOL_MIN_EVENT_INTERVAL_MS = 150;
+const DISTANCE_MIN_EVENT_INTERVAL_MS = 200;
+const MAX_DISTANCE_EVENT_VALUE = 60;
+const FREESTYLE_VICTORY_BONUS = 1_000;
+const VICTORY_EVENT_GRACE_MS = 1_500;
+const FREESTYLE_ACCELERATION_PER_SECOND = 20;
+const FREESTYLE_CAP_TOLERANCE = 25;
+const FREESTYLEPRO_CAP_TOLERANCE = 5;
+
+const QUIZ_EVENT_TYPES: GameEventType[] = ["quiz_correct", "quiz_wrong"];
+const ATAJAGOL_EVENT_TYPES: GameEventType[] = [
+  "atajagol_small_ball",
+  "atajagol_medium_ball",
+  "atajagol_large_ball",
+  "atajagol_yellow_card",
+  "atajagol_red_card",
+];
+const FREESTYLE_EVENT_TYPES: GameEventType[] = [
+  "freestyle_distance",
+  "freestyle_victory_bonus",
+];
+const FREESTYLEPRO_EVENT_TYPES: GameEventType[] = [
+  "freestylepro_distance",
+  "freestylepro_victory_bonus",
+];
 
 const resolveScheduleConfig = (
   schedule?: Partial<GameScheduleConfig> | null,
@@ -92,6 +141,74 @@ const getScheduleStatus = (
   return "active";
 };
 
+const toPositiveInt = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+};
+
+const toFiniteNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const sumCounts = (map: Record<string, number>, eventTypes: readonly string[]) =>
+  eventTypes.reduce((acc, eventType) => acc + (map[eventType] || 0), 0);
+
+const sessionElapsedMs = (playedAt: Date, now: Date) => Math.max(0, now.getTime() - playedAt.getTime());
+
+const getGameTimeLimitSeconds = (config: any, gameType: GameType) => {
+  const globalTimeLimit = toPositiveInt(config?.globalTimeLimit, 60);
+
+  switch (gameType) {
+    case "quiz":
+      return toPositiveInt(config?.quiz?.timeLimit, globalTimeLimit);
+    case "atajagol":
+      return toPositiveInt(config?.atajaGol?.timeLimit, globalTimeLimit);
+    case "freestyle":
+      return toPositiveInt(config?.freestyle?.timeLimit, globalTimeLimit);
+    case "freestylepro":
+      return toPositiveInt(config?.freestylePro?.timeLimit, globalTimeLimit);
+    default:
+      return globalTimeLimit;
+  }
+};
+
+const getEventMinIntervalMs = (eventType: GameEventType) => {
+  if (QUIZ_EVENT_TYPES.includes(eventType)) return QUIZ_MIN_ANSWER_INTERVAL_MS;
+  if (ATAJAGOL_EVENT_TYPES.includes(eventType)) return ATAJAGOL_MIN_EVENT_INTERVAL_MS;
+  if (eventType === "freestyle_distance" || eventType === "freestylepro_distance") {
+    return DISTANCE_MIN_EVENT_INTERVAL_MS;
+  }
+  return 0;
+};
+
+const computeDistanceCap = (
+  elapsedSeconds: number,
+  startSpeed: number,
+  maxSpeed: number,
+  pointsFactor: number,
+) => {
+  if (elapsedSeconds <= 0 || pointsFactor <= 0) return 0;
+
+  const start = Math.abs(toFiniteNumber(startSpeed, 450));
+  const max = Math.max(start, Math.abs(toFiniteNumber(maxSpeed, 1500)));
+  const acceleration = FREESTYLE_ACCELERATION_PER_SECOND;
+  const secondsToMax = (max - start) / acceleration;
+
+  let distance = 0;
+  if (elapsedSeconds <= secondsToMax) {
+    distance = start * elapsedSeconds + 0.5 * acceleration * elapsedSeconds * elapsedSeconds;
+  } else {
+    distance =
+      start * secondsToMax +
+      0.5 * acceleration * secondsToMax * secondsToMax +
+      max * (elapsedSeconds - secondsToMax);
+  }
+
+  return distance * pointsFactor;
+};
+
 // Function to clear the cache when config is updated
 export const clearGameConfigCache = () => {
   cache.config = null;
@@ -111,27 +228,27 @@ export const getGameConfig = async () => {
       quiz: {
         questions: [
           {
-            q: "¿Quién ganó el primer Mundial en 1930?",
+            q: "Quien gano el primer Mundial en 1930?",
             answers: ["Brasil", "Uruguay", "Argentina", "Italia"],
             correct: "Uruguay",
           },
           {
-            q: "¿En qué año México organizó su primer Mundial?",
+            q: "En que ano Mexico organizo su primer Mundial?",
             answers: ["1970", "1986", "1968", "1994"],
             correct: "1970",
           },
           {
-            q: "¿Qué jugador es conocido como 'O Rei'?",
-            answers: ["Maradona", "Messi", "Pelé", "Ronaldo"],
-            correct: "Pelé",
+            q: "Que jugador es conocido como 'O Rei'?",
+            answers: ["Maradona", "Messi", "Pele", "Ronaldo"],
+            correct: "Pele",
           },
           {
-            q: "¿Quién anotó la 'Mano de Dios'?",
-            answers: ["Pelé", "Maradona", "Zidane", "Messi"],
+            q: "Quien anoto la 'Mano de Dios'?",
+            answers: ["Pele", "Maradona", "Zidane", "Messi"],
             correct: "Maradona",
           },
           {
-            q: "¿Qué país tiene más copas del mundo?",
+            q: "Que pais tiene mas copas del mundo?",
             answers: ["Alemania", "Italia", "Brasil", "Argentina"],
             correct: "Brasil",
           },
@@ -203,14 +320,15 @@ export const startGame = async (
       status: 403,
     });
   }
-  const result = await prisma.$transaction(async (tx: any) => {
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     if (!isAdmin) {
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: { scribeCoins: true },
       });
       if (!user || user.scribeCoins < 1) {
-        throw Object.assign(new Error("Créditos insuficientes"), {
+        throw Object.assign(new Error("Creditos insuficientes"), {
           status: 400,
         });
       }
@@ -219,29 +337,375 @@ export const startGame = async (
         data: { scribeCoins: { decrement: 1 } },
       });
     }
-    const game = await tx.gameLog.create({
-      data: { userId, gameType, score: 0 },
+
+    return tx.gameLog.create({
+      data: {
+        userId,
+        gameType,
+        score: 0,
+        status: "in_progress",
+        eventCount: 0,
+        finishedAt: null,
+        lastEventAt: null,
+      },
     });
-    return game;
   });
-  return result;
 };
 
-export const submitScore = async (
-  userId: string,
-  gameType: GameType,
-  score: number,
-) => {
-  const game = await prisma.gameLog.create({
-    data: { userId, gameType, score },
+const getGameEventStats = async (gameId: string) => {
+  const rows = await prisma.gameEvent.groupBy({
+    by: ["eventType"],
+    where: { gameLogId: gameId },
+    _count: { _all: true },
+    _sum: { pointsDelta: true },
   });
+
+  const eventCounts: Record<string, number> = {};
+  const eventPoints: Record<string, number> = {};
+
+  for (const row of rows) {
+    eventCounts[row.eventType] = row._count._all;
+    eventPoints[row.eventType] = row._sum.pointsDelta || 0;
+  }
+
+  return { eventCounts, eventPoints };
+};
+
+const ensureEventBelongsToGame = (gameType: GameType, eventType: GameEventType) => {
+  if (gameType === "quiz" && QUIZ_EVENT_TYPES.includes(eventType)) return;
+  if (gameType === "atajagol" && ATAJAGOL_EVENT_TYPES.includes(eventType)) return;
+  if (gameType === "freestyle" && FREESTYLE_EVENT_TYPES.includes(eventType)) return;
+  if (gameType === "freestylepro" && FREESTYLEPRO_EVENT_TYPES.includes(eventType)) return;
+
+  throw Object.assign(
+    new Error("Evento no permitido para el tipo de juego indicado"),
+    { status: 400 },
+  );
+};
+
+const calculatePointsDelta = (params: {
+  config: any;
+  gameType: GameType;
+  eventType: GameEventType;
+  value?: number;
+  eventCounts: Record<string, number>;
+  eventPoints: Record<string, number>;
+  elapsedMs: number;
+  timeLimitSeconds: number;
+}) => {
+  const {
+    config,
+    gameType,
+    eventType,
+    value,
+    eventCounts,
+    eventPoints,
+    elapsedMs,
+    timeLimitSeconds,
+  } = params;
+
+  if (gameType === "quiz") {
+    const questionCount = Array.isArray(config?.quiz?.questions)
+      ? config.quiz.questions.length
+      : 0;
+    const maxByQuestions = questionCount > 0 ? questionCount : Number.MAX_SAFE_INTEGER;
+    const maxByTime = Math.floor(elapsedMs / QUIZ_MIN_ANSWER_INTERVAL_MS) + 1;
+    const maxAnswers = Math.min(maxByQuestions, maxByTime);
+    const answeredCount = sumCounts(eventCounts, QUIZ_EVENT_TYPES);
+
+    if (answeredCount + 1 > maxAnswers) {
+      throw Object.assign(
+        new Error("Se recibieron mas respuestas de las posibles para el tiempo jugado"),
+        { status: 400 },
+      );
+    }
+
+    if (eventType === "quiz_wrong") return 0;
+    return toPositiveInt(config?.quiz?.pointsPerCorrectAnswer, 10);
+  }
+
+  if (gameType === "atajagol") {
+    const currentEvents = sumCounts(eventCounts, ATAJAGOL_EVENT_TYPES);
+    const maxEventsByTime = Math.floor(elapsedMs / ATAJAGOL_MIN_EVENT_INTERVAL_MS) + 2;
+
+    if (currentEvents + 1 > maxEventsByTime) {
+      throw Object.assign(
+        new Error("Se detecto una frecuencia de eventos imposible para AtajaGol"),
+        { status: 400 },
+      );
+    }
+
+    const pointsByEvent: Record<GameEventType, number> = {
+      quiz_correct: 0,
+      quiz_wrong: 0,
+      atajagol_small_ball: toPositiveInt(config?.atajaGol?.smallBallPoints, 1),
+      atajagol_medium_ball: toPositiveInt(config?.atajaGol?.mediumBallPoints, 2),
+      atajagol_large_ball: toPositiveInt(config?.atajaGol?.largeBallPoints, 3),
+      atajagol_yellow_card: Math.min(0, Math.floor(toFiniteNumber(config?.atajaGol?.yellowCardPoints, -1))),
+      atajagol_red_card: Math.min(0, Math.floor(toFiniteNumber(config?.atajaGol?.redCardPoints, -3))),
+      freestyle_distance: 0,
+      freestyle_victory_bonus: 0,
+      freestylepro_distance: 0,
+      freestylepro_victory_bonus: 0,
+    };
+
+    return pointsByEvent[eventType];
+  }
+
+  if (gameType === "freestyle") {
+    if (eventType === "freestyle_victory_bonus") {
+      const victories = eventCounts.freestyle_victory_bonus || 0;
+      if (victories > 0) {
+        throw Object.assign(new Error("El bonus de victoria ya fue registrado"), {
+          status: 400,
+        });
+      }
+      if (elapsedMs + VICTORY_EVENT_GRACE_MS < timeLimitSeconds * 1000) {
+        throw Object.assign(new Error("No se puede registrar victoria antes del tiempo minimo"), {
+          status: 400,
+        });
+      }
+      return FREESTYLE_VICTORY_BONUS;
+    }
+
+    if (typeof value !== "number") {
+      throw Object.assign(new Error("El evento de distancia requiere el campo value"), {
+        status: 400,
+      });
+    }
+
+    const chunk = toPositiveInt(value, 0);
+    if (chunk < 1 || chunk > MAX_DISTANCE_EVENT_VALUE) {
+      throw Object.assign(new Error("Delta de distancia invalido"), {
+        status: 400,
+      });
+    }
+
+    const currentDistance = eventPoints.freestyle_distance || 0;
+    const cap = computeDistanceCap(
+      elapsedMs / 1000,
+      toFiniteNumber(config?.freestyle?.startSpeed, -450),
+      toFiniteNumber(config?.freestyle?.maxSpeed, -1500),
+      0.1,
+    );
+
+    if (currentDistance + chunk > cap + FREESTYLE_CAP_TOLERANCE) {
+      throw Object.assign(
+        new Error("Distancia acumulada fuera del rango permitido para el tiempo jugado"),
+        { status: 400 },
+      );
+    }
+
+    return chunk;
+  }
+
+  if (eventType === "freestylepro_victory_bonus") {
+    const victories = eventCounts.freestylepro_victory_bonus || 0;
+    if (victories > 0) {
+      throw Object.assign(new Error("El bonus de victoria ya fue registrado"), {
+        status: 400,
+      });
+    }
+    if (elapsedMs + VICTORY_EVENT_GRACE_MS < timeLimitSeconds * 1000) {
+      throw Object.assign(new Error("No se puede registrar victoria antes del tiempo minimo"), {
+        status: 400,
+      });
+    }
+    return toPositiveInt(config?.freestylePro?.victoryBonus, 1000);
+  }
+
+  if (typeof value !== "number") {
+    throw Object.assign(new Error("El evento de distancia requiere el campo value"), {
+      status: 400,
+    });
+  }
+
+  const chunk = toPositiveInt(value, 0);
+  if (chunk < 1 || chunk > MAX_DISTANCE_EVENT_VALUE) {
+    throw Object.assign(new Error("Delta de distancia invalido"), {
+      status: 400,
+    });
+  }
+
+  const currentDistance = eventPoints.freestylepro_distance || 0;
+  const distanceMultiplier = toFiniteNumber(config?.freestylePro?.distanceMultiplier, 0.01);
+  const distanceToPointsRatio = Math.max(1, toFiniteNumber(config?.freestylePro?.distanceToPointsRatio, 100));
+  const cap = computeDistanceCap(
+    elapsedMs / 1000,
+    toFiniteNumber(config?.freestylePro?.startSpeed, -450),
+    toFiniteNumber(config?.freestylePro?.maxSpeed, -1500),
+    distanceMultiplier / distanceToPointsRatio,
+  );
+
+  if (currentDistance + chunk > cap + FREESTYLEPRO_CAP_TOLERANCE) {
+    throw Object.assign(
+      new Error("Distancia acumulada fuera del rango permitido para el tiempo jugado"),
+      { status: 400 },
+    );
+  }
+
+  return chunk;
+};
+
+export const recordGameEvent = async (userId: string, input: RecordGameEventInput) => {
+  const config = await getGameConfig();
+  const now = new Date();
+
+  const game = await prisma.gameLog.findFirst({
+    where: {
+      id: input.gameId,
+      userId,
+      gameType: input.gameType,
+    },
+    select: {
+      id: true,
+      gameType: true,
+      score: true,
+      status: true,
+      playedAt: true,
+      eventCount: true,
+      lastEventAt: true,
+    },
+  });
+
+  if (!game) {
+    throw Object.assign(new Error("Partida no encontrada"), {
+      status: 404,
+    });
+  }
+
+  if (game.status !== "in_progress") {
+    throw Object.assign(new Error("La partida ya fue finalizada"), {
+      status: 409,
+    });
+  }
+
+  ensureEventBelongsToGame(input.gameType, input.eventType);
+
+  const timeLimitSeconds = getGameTimeLimitSeconds(config, input.gameType);
+  const elapsedMs = sessionElapsedMs(game.playedAt, now);
+  if (elapsedMs > timeLimitSeconds * 1000 + GAME_SESSION_GRACE_MS) {
+    throw Object.assign(new Error("La sesion de juego expiro"), {
+      status: 403,
+    });
+  }
+
+  const expectedSequence = game.eventCount + 1;
+  if (input.sequence !== expectedSequence) {
+    throw Object.assign(
+      new Error(`Secuencia invalida. Se esperaba ${expectedSequence}`),
+      { status: 409 },
+    );
+  }
+
+  const minIntervalMs = getEventMinIntervalMs(input.eventType);
+  if (game.lastEventAt && minIntervalMs > 0) {
+    const elapsedSinceLastEvent = sessionElapsedMs(game.lastEventAt, now);
+    if (elapsedSinceLastEvent < minIntervalMs) {
+      throw Object.assign(new Error("Eventos enviados demasiado rapido"), {
+        status: 429,
+      });
+    }
+  }
+
+  const { eventCounts, eventPoints } = await getGameEventStats(game.id);
+  const pointsDelta = calculatePointsDelta({
+    config,
+    gameType: input.gameType,
+    eventType: input.eventType,
+    value: input.value,
+    eventCounts,
+    eventPoints,
+    elapsedMs,
+    timeLimitSeconds,
+  });
+
+  const nextScore = Math.max(0, game.score + pointsDelta);
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.gameEvent.create({
+      data: {
+        gameLogId: game.id,
+        userId,
+        gameType: input.gameType,
+        eventType: input.eventType,
+        sequence: input.sequence,
+        pointsDelta,
+        metadata: {
+          value: input.value,
+          elapsedMs,
+        },
+      },
+    });
+
+    return tx.gameLog.update({
+      where: { id: game.id },
+      data: {
+        score: nextScore,
+        eventCount: expectedSequence,
+        lastEventAt: now,
+      },
+      select: {
+        id: true,
+        gameType: true,
+        score: true,
+        eventCount: true,
+        status: true,
+      },
+    });
+  });
+};
+
+export const finishGame = async (
+  userId: string,
+  gameId: string,
+  gameType: GameType,
+) => {
+  const existingGame = await prisma.gameLog.findFirst({
+    where: {
+      id: gameId,
+      userId,
+      gameType,
+    },
+    select: {
+      id: true,
+      score: true,
+      status: true,
+      eventCount: true,
+    },
+  });
+
+  if (!existingGame) {
+    throw Object.assign(new Error("Partida no encontrada"), {
+      status: 404,
+    });
+  }
+
+  if (existingGame.status === "completed") {
+    return existingGame;
+  }
+
+  const game = await prisma.gameLog.update({
+    where: { id: gameId },
+    data: {
+      status: "completed",
+      finishedAt: new Date(),
+    },
+    select: {
+      id: true,
+      score: true,
+      status: true,
+      eventCount: true,
+    },
+  });
+
   return game;
 };
 
 export const getUserTotalScore = async (userId: string) => {
   const aggregated = await prisma.gameLog.aggregate({
     _sum: { score: true },
-    where: { userId },
+    where: { userId, status: "completed" },
   });
   return aggregated._sum.score || 0;
 };

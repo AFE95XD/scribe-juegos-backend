@@ -29,6 +29,9 @@ type SendEmailParams = {
   html: string;
 };
 
+const emailHeaderImageStyle =
+  'display: block; width: 100%; max-width: 600px; height: auto; border-radius: 10px 10px 0 0; margin: 0 auto;';
+
 const sendEmail = async ({ to, subject, html }: SendEmailParams) => {
   if (env.emailProvider === 'sendgrid') {
     if (!env.sendgridApiKey) {
@@ -59,9 +62,10 @@ export const sendVerificationEmail = async (params: {
   const verificationUrl = `${env.frontendUrl}/verificar/${params.verificationToken}`;
 
   const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-        <div style="background: linear-gradient(135deg, #ce0e2d 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/f_auto,q_auto/v1/Logo-scribe-mail_dxfcdx.png" alt="Scribe Logo" width="200" style="display:block; width:200px; max-width:200px; height:auto; border:0; outline:none; text-decoration:none; margin:0 auto 10px;"/>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+        <div style="text-align: center;">
+          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/v1772236347/SCR_El_Juego_H_3_sy2hvl.png" style="${emailHeaderImageStyle}" />
+          <!--<img src="https://res.cloudinary.com/dzrdupagx/image/upload/f_auto,q_auto/v1/Logo-scribe-mail_dxfcdx.png" alt="Scribe Logo" width="200" style="display:block; width:200px; max-width:200px; height:auto; border:0; outline:none; text-decoration:none; margin:0 auto 10px;"/>-->
           <!--<h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Scribe</h1>
           <p style="color: #fef08a; margin: 5px 0 0 0; font-size: 14px; font-weight: bold;">El Juego</p> -->
         </div>
@@ -76,7 +80,7 @@ export const sendVerificationEmail = async (params: {
           </p>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${verificationUrl}" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; transition: all 0.3s;">
+            <a clicktracking="off" href="${verificationUrl}" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; transition: all 0.3s;">
               VERIFICAR MI CUENTA
             </a>
           </div>
@@ -116,8 +120,8 @@ export const sendRedemptionConfirmationToUser = async (params: {
 }) => {
   const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-        <div style="background: linear-gradient(135deg, #ce0e2d 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/f_auto,q_auto/v1/Logo-scribe-mail_dxfcdx.png" alt="Scribe Logo" width="200" style="display:block; width:200px; max-width:200px; height:auto; border:0; outline:none; text-decoration:none; margin:0 auto 10px;"/>
+        <div style="text-align: center;">
+          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/v1772236347/SCR_El_Juego_H_3_sy2hvl.png" style="${emailHeaderImageStyle}" />
           <!-- <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Scribe</h1>
           <p style="color: #fef08a; margin: 5px 0 0 0; font-size: 14px; font-weight: bold;">El Juego</p> -->
         </div>
@@ -182,8 +186,8 @@ export const sendRedemptionNotificationToAdmins = async (params: {
 
   const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-        <div style="background: linear-gradient(135deg, #ce0e2d 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/f_auto,q_auto/v1/Logo-scribe-mail_dxfcdx.png" alt="Scribe Logo" width="200" style="display:block; width:200px; max-width:200px; height:auto; border:0; outline:none; text-decoration:none; margin:0 auto 10px;"/>
+        <div style="text-align: center;">
+          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/v1772236347/SCR_El_Juego_H_3_sy2hvl.png" style="${emailHeaderImageStyle}" />
           <!-- <h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Scribe Admin</h1>
           <p style="color: #fef08a; margin: 5px 0 0 0; font-size: 14px; font-weight: bold;">NOTIFICACIÓN DE CANJE</p> -->
         </div>
@@ -221,7 +225,7 @@ export const sendRedemptionNotificationToAdmins = async (params: {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${env.frontendUrl}/admin" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            <a clicktracking="off" href="${env.frontendUrl}/admin" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
               VER EN PANEL ADMIN
             </a>
           </div>
@@ -255,8 +259,8 @@ export const sendPasswordRecoveryEmail = async (params: {
 
   const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
-        <div style="background: linear-gradient(135deg, #ce0e2d 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/f_auto,q_auto/v1/Logo-scribe-mail_dxfcdx.png" alt="Scribe Logo" width="200" style="display:block; width:200px; max-width:200px; height:auto; border:0; outline:none; text-decoration:none; margin:0 auto 10px;"/>
+        <div style="text-align: center;">
+          <img src="https://res.cloudinary.com/dzrdupagx/image/upload/v1772236347/SCR_El_Juego_H_3_sy2hvl.png" style="${emailHeaderImageStyle}" />
           <!--<h1 style="color: white; margin: 0; font-size: 32px; font-weight: bold;">Scribe</h1>
           <p style="color: #fef08a; margin: 5px 0 0 0; font-size: 14px; font-weight: bold;">RECUPERACIÓN DE CONTRASEÑA</p> -->
         </div>
@@ -271,7 +275,7 @@ export const sendPasswordRecoveryEmail = async (params: {
           </p>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${recoveryUrl}" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+            <a clicktracking="off" href="${recoveryUrl}" style="display: inline-block; background-color: #ce0e2d; color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
               CAMBIAR CONTRASEÑA
             </a>
           </div>

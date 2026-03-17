@@ -90,15 +90,41 @@ const options: swaggerJSDoc.Options = {
           type: 'object',
           required: ['gameType'],
           properties: {
-            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle'] }
+            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] }
           }
         },
-        GameScoreRequest: {
+        GameEventRequest: {
           type: 'object',
-          required: ['gameType', 'score'],
+          required: ['gameId', 'gameType', 'eventType', 'sequence'],
           properties: {
-            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle'] },
-            score: { type: 'integer', minimum: 0 }
+            gameId: { type: 'string', format: 'uuid' },
+            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] },
+            eventType: {
+              type: 'string',
+              enum: [
+                'quiz_correct',
+                'quiz_wrong',
+                'atajagol_small_ball',
+                'atajagol_medium_ball',
+                'atajagol_large_ball',
+                'atajagol_yellow_card',
+                'atajagol_red_card',
+                'freestyle_distance',
+                'freestyle_victory_bonus',
+                'freestylepro_distance',
+                'freestylepro_victory_bonus'
+              ]
+            },
+            sequence: { type: 'integer', minimum: 1 },
+            value: { type: 'integer', minimum: 0 }
+          }
+        },
+        GameFinishRequest: {
+          type: 'object',
+          required: ['gameId', 'gameType'],
+          properties: {
+            gameId: { type: 'string', format: 'uuid' },
+            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] }
           }
         },
         GameConfig: {
