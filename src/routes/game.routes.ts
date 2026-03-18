@@ -2,13 +2,12 @@ import { Router } from "express";
 import {
   fetchConfig,
   start,
-  submitEvent,
   submit,
   totalScore,
 } from "../controllers/game.controller";
 import { requireAuth } from "../middlewares/authMiddleware";
 import { validateRequest } from "../middlewares/validateRequest";
-import { gameEventSchema, gameFinishSchema, gameStartSchema } from "../schemas/game.schema";
+import { gameScoreSchema, gameStartSchema } from "../schemas/game.schema";
 
 const router = Router();
 
@@ -38,7 +37,7 @@ router.get("/config", fetchConfig);
  *             $ref: '#/components/schemas/GameStartRequest'
  *     responses:
  *       200:
- *         description: Partida iniciada
+ *         description: Partida iniciada y token temporal de envio de score
  *       400:
  *         description: Créditos insuficientes
  *       401:
@@ -48,30 +47,9 @@ router.post("/start", requireAuth, validateRequest(gameStartSchema), start);
 
 /**
  * @openapi
- * /games/event:
- *   post:
- *     summary: Registrar evento valido de partida y calcular puntaje en servidor
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/GameEventRequest'
- *     responses:
- *       200:
- *         description: Evento aceptado y puntaje actualizado
- *       401:
- *         description: No autorizado
- */
-router.post("/event", requireAuth, validateRequest(gameEventSchema), submitEvent);
-
-/**
- * @openapi
  * /games/score:
  *   post:
- *     summary: Finalizar partida y devolver puntaje calculado por servidor
+ *     summary: Guardar puntaje de partida (payload cifrado + token de un solo uso)
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -79,14 +57,14 @@ router.post("/event", requireAuth, validateRequest(gameEventSchema), submitEvent
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/GameFinishRequest'
+ *             $ref: '#/components/schemas/GameScoreRequest'
  *     responses:
  *       200:
- *         description: Partida finalizada
+ *         description: Puntaje guardado
  *       401:
  *         description: No autorizado
  */
-router.post("/score", requireAuth, validateRequest(gameFinishSchema), submit);
+router.post("/score", requireAuth, validateRequest(gameScoreSchema), submit);
 
 /**
  * @openapi

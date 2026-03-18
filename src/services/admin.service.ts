@@ -197,7 +197,6 @@ export const getLeaderboard = async (params?: {
     _sum: { score: true },
     _count: { score: true },
     where: {
-      status: 'completed',
       playedAt: {
         gte: startDate,
         lte: endDate

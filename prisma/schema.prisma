@@ -25,6 +25,7 @@ model User {
   verificationTokenExpiresAt DateTime?       @map("verification_token_expires_at")
   tickets                Ticket[]
   gameLogs               GameLog[]
+  gameSubmissionTokens   GameSubmissionToken[]
   prizeRedemptions       PrizeRedemption[]
 }
 
@@ -68,34 +69,30 @@ model TicketExport {
 }
 
 model GameLog {
-  id          String      @id @default(uuid())
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String      @map("user_id")
-  gameType    String      @map("game_type") @db.VarChar(20)
-  score       Int
-  status      String      @default("completed") @db.VarChar(20)
-  eventCount  Int         @default(0) @map("event_count")
-  playedAt    DateTime    @default(now()) @map("played_at")
-  finishedAt  DateTime?   @map("finished_at")
-  lastEventAt DateTime?   @map("last_event_at")
-  events      GameEvent[]
+  id       String   @id @default(uuid())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId   String   @map("user_id")
+  gameType String   @map("game_type") @db.VarChar(20)
+  score    Int
+  playedAt DateTime @default(now()) @map("played_at")
+  submissionTokens GameSubmissionToken[]
 }
 
-model GameEvent {
-  id         String   @id @default(uuid())
-  gameLog    GameLog  @relation(fields: [gameLogId], references: [id], onDelete: Cascade)
-  gameLogId  String   @map("game_log_id")
-  userId     String   @map("user_id")
-  gameType   String   @map("game_type") @db.VarChar(20)
-  eventType  String   @map("event_type") @db.VarChar(50)
-  sequence   Int
-  pointsDelta Int     @map("points_delta")
-  metadata   Json?    @db.JsonB
-  createdAt  DateTime @default(now()) @map("created_at")
+model GameSubmissionToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @map("token_hash")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  gameLog   GameLog  @relation(fields: [gameLogId], references: [id], onDelete: Cascade)
+  gameLogId String   @map("game_log_id")
+  gameType  String   @map("game_type") @db.VarChar(20)
+  expiresAt DateTime @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([userId])
   @@index([gameLogId])
-  @@index([userId, createdAt])
-  @@unique([gameLogId, sequence])
+  @@index([expiresAt])
 }
 
 model Prize {

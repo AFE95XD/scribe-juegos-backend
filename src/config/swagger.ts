@@ -93,38 +93,19 @@ const options: swaggerJSDoc.Options = {
             gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] }
           }
         },
-        GameEventRequest: {
+        GameScoreRequest: {
           type: 'object',
-          required: ['gameId', 'gameType', 'eventType', 'sequence'],
+          required: ['attemptToken', 'encryptedPayload'],
           properties: {
-            gameId: { type: 'string', format: 'uuid' },
-            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] },
-            eventType: {
-              type: 'string',
-              enum: [
-                'quiz_correct',
-                'quiz_wrong',
-                'atajagol_small_ball',
-                'atajagol_medium_ball',
-                'atajagol_large_ball',
-                'atajagol_yellow_card',
-                'atajagol_red_card',
-                'freestyle_distance',
-                'freestyle_victory_bonus',
-                'freestylepro_distance',
-                'freestylepro_victory_bonus'
-              ]
-            },
-            sequence: { type: 'integer', minimum: 1 },
-            value: { type: 'integer', minimum: 0 }
-          }
-        },
-        GameFinishRequest: {
-          type: 'object',
-          required: ['gameId', 'gameType'],
-          properties: {
-            gameId: { type: 'string', format: 'uuid' },
-            gameType: { type: 'string', enum: ['quiz', 'atajagol', 'freestyle', 'freestylepro'] }
+            attemptToken: { type: 'string' },
+            encryptedPayload: {
+              type: 'object',
+              required: ['iv', 'ciphertext'],
+              properties: {
+                iv: { type: 'string' },
+                ciphertext: { type: 'string' }
+              }
+            }
           }
         },
         GameConfig: {
