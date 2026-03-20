@@ -4,7 +4,7 @@ import { createDecipheriv, createHash, randomBytes } from "crypto";
 type GameType = "quiz" | "atajagol" | "freestyle" | "freestylepro";
 type EncryptedScorePayload = { iv: string; ciphertext: string };
 
-const GAME_SUBMISSION_TOKEN_TTL_MS = 15 * 60 * 1000;
+const GAME_SUBMISSION_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 const cache = {
   config: null as any,
