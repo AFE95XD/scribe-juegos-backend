@@ -231,16 +231,23 @@ export const startGame = async (
   userId: string,
   gameType: GameType,
   isAdmin: boolean,
+  isSuperAdmin: boolean,
 ) => {
+  if (isAdmin && !isSuperAdmin) {
+    throw Object.assign(new Error("Los administradores no tienen acceso para jugar."), {
+      status: 403,
+    });
+  }
+
   const config = await getGameConfig();
   const scheduleWindow = getScheduleWindow(config.schedule, gameType);
   const status = getScheduleStatus(scheduleWindow, new Date());
-  if (status === "upcoming") {
+  if (status === "upcoming" && !isSuperAdmin) {
     throw Object.assign(new Error("Juego disponible proximamente."), {
       status: 403,
     });
   }
-  if (status === "ended") {
+  if (status === "ended" && !isSuperAdmin) {
     throw Object.assign(new Error("Gracias por participar. El juego ya termino."), {
       status: 403,
     });
@@ -248,9 +255,10 @@ export const startGame = async (
   const attemptToken = randomBytes(32).toString("base64url");
   const tokenHash = hashAttemptToken(attemptToken);
   const expiresAt = new Date(Date.now() + GAME_SUBMISSION_TOKEN_TTL_MS);
+  const shouldConsumeCoin = !isAdmin || isSuperAdmin;
 
   const result = await prisma.$transaction(async (tx: any) => {
-    if (!isAdmin) {
+    if (shouldConsumeCoin) {
       const user = await tx.user.findUnique({
         where: { id: userId },
         select: { scribeCoins: true },

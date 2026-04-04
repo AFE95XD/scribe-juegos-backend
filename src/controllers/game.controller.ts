@@ -12,7 +12,7 @@ export const start = async (req: AuthRequest, res: Response) => {
     return res.status(401).json({ message: 'Unauthorized' });
   }
   const { gameType } = req.body;
-  const game = await startGame(req.user.id, gameType, req.user.isAdmin);
+  const game = await startGame(req.user.id, gameType, req.user.isAdmin, req.user.isSuperAdmin);
   res.json({ attemptToken: game.attemptToken, expiresAt: game.expiresAt.toISOString() });
 };
 
