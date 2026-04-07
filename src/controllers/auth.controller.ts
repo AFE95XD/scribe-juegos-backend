@@ -1,5 +1,13 @@
 import { Request, Response } from 'express';
-import { getUserProfile, loginUser, registerUser, verifyUserByToken, sendRecoveryCode, resetPassword } from '../services/auth.service';
+import {
+  getUserProfile,
+  loginUser,
+  registerUser,
+  verifyUserByToken,
+  sendRecoveryCode,
+  resetPassword,
+  resendVerificationForEmail
+} from '../services/auth.service';
 import { AuthRequest } from '../middlewares/authMiddleware';
 
 export const register = async (req: Request, res: Response) => {
@@ -53,4 +61,13 @@ export const resetPasswordController = async (req: Request, res: Response) => {
 
   await resetPassword(token, newPassword);
   res.json({ message: 'Contraseña actualizada exitosamente' });
+};
+
+export const resendVerificationController = async (req: Request, res: Response) => {
+  const { email } = req.body;
+  await resendVerificationForEmail(email);
+
+  res.json({
+    message: 'Si el correo existe y no esta verificado, te enviaremos un enlace de verificacion.'
+  });
 };

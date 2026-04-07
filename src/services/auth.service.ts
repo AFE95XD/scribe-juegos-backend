@@ -133,6 +133,33 @@ export const loginUser = async (email: string, password: string) => {
   return { token: generateToken(user.id, user.isAdmin, user.isSuperAdmin), user };
 };
 
+export const resendVerificationForEmail = async (email: string): Promise<void> => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+
+  // Respuesta generica para no revelar si el correo existe o no.
+  if (!user || user.isVerified) {
+    return;
+  }
+
+  const verificationToken = generateVerificationToken(user.id);
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      verificationToken,
+      verificationTokenExpiresAt: expiresAt
+    }
+  });
+
+  void sendVerificationEmail({
+    email: user.email,
+    name: user.name,
+    verificationToken,
+  }).catch((err) => console.error('Error resending verification email:', err));
+};
+
 export const getUserProfile = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },

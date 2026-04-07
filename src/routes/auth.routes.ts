@@ -1,7 +1,21 @@
 import { Router } from 'express';
-import { login, me, register, verify, sendRecoveryCodeController, resetPasswordController } from '../controllers/auth.controller';
+import {
+  login,
+  me,
+  register,
+  verify,
+  sendRecoveryCodeController,
+  resetPasswordController,
+  resendVerificationController
+} from '../controllers/auth.controller';
 import { validateRequest } from '../middlewares/validateRequest';
-import { loginSchema, registerSchema, sendRecoverySchema, resetPasswordSchema } from '../schemas/auth.schema';
+import {
+  loginSchema,
+  registerSchema,
+  sendRecoverySchema,
+  resetPasswordSchema,
+  resendVerificationSchema
+} from '../schemas/auth.schema';
 import { authLimiter, resendVerificationLimiter } from '../config/rateLimit';
 import { requireAuth } from '../middlewares/authMiddleware';
 
@@ -48,6 +62,14 @@ router.post('/register', authLimiter, resendVerificationLimiter, validateRequest
  *         description: Credenciales inválidas
  */
 router.post('/login', authLimiter, validateRequest(loginSchema), login);
+
+router.post(
+  '/resend-verification',
+  authLimiter,
+  resendVerificationLimiter,
+  validateRequest(resendVerificationSchema),
+  resendVerificationController
+);
 
 /**
  * @openapi

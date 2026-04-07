@@ -62,3 +62,12 @@ export const resetPasswordSchema = z.object({
       .transform(s => s.trim()),
   }),
 });
+
+export const resendVerificationSchema = z.object({
+  body: z.object({
+    email: z.string()
+      .email("Email invalido")
+      .max(254, "El correo electronico no puede exceder 254 caracteres")
+      .transform(s => s.trim().toLowerCase()),
+  }),
+});
