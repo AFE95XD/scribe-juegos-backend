@@ -264,7 +264,7 @@ export const getRegisteredUsers = async (params?: {
 export const getTotalUsersCount = async () => {
   const [result] = await prisma.$queryRaw<Array<{ totalUsers: number }>>`
     SELECT COUNT(*)::int AS "totalUsers"
-    FROM "User"
+    FROM "Historial"
   `;
 
   return { totalUsers: result?.totalUsers ?? 0 };
