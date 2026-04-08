@@ -193,31 +193,185 @@ const generateVerificationToken = (userId: string) =>
 const generatePasswordResetToken = (userId: string) =>
   jwt.sign({ sub: userId, purpose: 'password-reset' }, env.jwtSecret, { expiresIn: '1h' });
 
-export const verifyUserByToken = async (token: string) => {
-  // 1. Validar JWT (firma y expiración)
-  const payload = jwt.verify(token, env.jwtSecret) as { sub: string; purpose?: string };
+type VerifyPayload = { sub: string; purpose?: string };
 
-  if (payload.purpose !== 'verify') {
-    throw Object.assign(new Error('Token de verificación inválido'), { status: 400 });
-  }
+type VerifyResultCode =
+  | 'verified'
+  | 'already_verified'
+  | 'resent_auto'
+  | 'manual_resend_required'
+  | 'invalid_token';
 
-  // 2. Buscar usuario con token válido en BD
-  const user = await prisma.user.findFirst({
-    where: {
-      id: payload.sub,
-      verificationToken: token,
-      verificationTokenExpiresAt: { gte: new Date() }
+export type VerifyUserResult = {
+  code: VerifyResultCode;
+  message: string;
+  userId?: string;
+  email?: string;
+};
+
+const getVerifyUserById = async (userId: string) =>
+  prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      isVerified: true,
+      verificationToken: true,
+      verificationTokenExpiresAt: true
     }
   });
 
-  if (!user) {
-    throw Object.assign(
-      new Error('Token inválido, expirado o ya utilizado'),
-      { status: 400 }
-    );
+const createAndStoreVerificationToken = async (userId: string) => {
+  const verificationToken = generateVerificationToken(userId);
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      verificationToken,
+      verificationTokenExpiresAt: expiresAt
+    }
+  });
+
+  return verificationToken;
+};
+
+const invalidTokenResult = (): VerifyUserResult => ({
+  code: 'invalid_token',
+  message: 'El enlace de verificacion no es valido. Solicita uno nuevo.'
+});
+
+const resendVerificationForUser = async (user: {
+  id: string;
+  name: string;
+  email: string;
+  verificationToken: string | null;
+  verificationTokenExpiresAt: Date | null;
+}): Promise<VerifyUserResult> => {
+  const now = new Date();
+
+  // Si ya existe un token vigente, no generar otro para evitar spam.
+  if (
+    user.verificationToken &&
+    user.verificationTokenExpiresAt &&
+    user.verificationTokenExpiresAt >= now
+  ) {
+    return {
+      code: 'resent_auto',
+      message: 'Tu enlace anterior ya no es valido. Revisa tu correo, ya tienes un enlace mas reciente.',
+      email: user.email
+    };
   }
 
-  // 3. Marcar como verificado y limpiar token
+  const verificationToken = await createAndStoreVerificationToken(user.id);
+
+  try {
+    await sendVerificationEmail({
+      email: user.email,
+      name: user.name,
+      verificationToken
+    });
+
+    return {
+      code: 'resent_auto',
+      message: 'Tu enlace de verificacion expiro. Te enviamos uno nuevo a tu correo.',
+      email: user.email
+    };
+  } catch (error) {
+    console.error('Error sending verification email after expired token:', error);
+    return {
+      code: 'manual_resend_required',
+      message: 'No pudimos reenviar el correo automaticamente. Intenta reenviarlo manualmente.',
+      email: user.email
+    };
+  }
+};
+
+export const verifyUserByToken = async (token: string): Promise<VerifyUserResult> => {
+  let payload: VerifyPayload;
+
+  try {
+    payload = jwt.verify(token, env.jwtSecret) as VerifyPayload;
+  } catch (error: any) {
+    const errorName = error?.name;
+
+    if (errorName === 'TokenExpiredError') {
+      let expiredPayload: VerifyPayload;
+      try {
+        expiredPayload = jwt.verify(token, env.jwtSecret, { ignoreExpiration: true }) as VerifyPayload;
+      } catch {
+        return invalidTokenResult();
+      }
+
+      if (expiredPayload.purpose !== 'verify') {
+        return invalidTokenResult();
+      }
+
+      const user = await getVerifyUserById(expiredPayload.sub);
+      if (!user) {
+        return invalidTokenResult();
+      }
+
+      if (user.isVerified) {
+        return {
+          code: 'already_verified',
+          message: 'Tu cuenta ya esta verificada.'
+        };
+      }
+
+      return resendVerificationForUser(user);
+    }
+
+    if (errorName === 'JsonWebTokenError' || errorName === 'NotBeforeError') {
+      return invalidTokenResult();
+    }
+
+    throw error;
+  }
+
+  if (payload.purpose !== 'verify') {
+    return invalidTokenResult();
+  }
+
+  const user = await getVerifyUserById(payload.sub);
+  if (!user) {
+    return invalidTokenResult();
+  }
+
+  if (user.isVerified) {
+    return {
+      code: 'already_verified',
+      message: 'Tu cuenta ya esta verificada.'
+    };
+  }
+
+  const now = new Date();
+
+  if (user.verificationToken !== token) {
+    if (
+      user.verificationToken &&
+      user.verificationTokenExpiresAt &&
+      user.verificationTokenExpiresAt >= now
+    ) {
+      return {
+        code: 'resent_auto',
+        message: 'Este enlace ya no es valido. Ya existe un enlace mas reciente en tu correo.',
+        email: user.email
+      };
+    }
+
+    return {
+      code: 'manual_resend_required',
+      message: 'Este enlace ya no es valido. Solicita el reenvio del correo de verificacion.',
+      email: user.email
+    };
+  }
+
+  if (!user.verificationTokenExpiresAt || user.verificationTokenExpiresAt < now) {
+    return resendVerificationForUser(user);
+  }
+
   const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -227,7 +381,11 @@ export const verifyUserByToken = async (token: string) => {
     }
   });
 
-  return { userId: updatedUser.id };
+  return {
+    code: 'verified',
+    message: 'User verified',
+    userId: updatedUser.id
+  };
 };
 
 export const sendRecoveryCode = async (emailOrPhone: string): Promise<void> => {
@@ -307,3 +465,4 @@ export const resetPassword = async (token: string, newPassword: string): Promise
     }
   });
 };
+

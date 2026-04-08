@@ -25,7 +25,7 @@ export const login = async (req: Request, res: Response) => {
 export const verify = async (req: Request, res: Response) => {
   const token = req.params.token as string;
   const result = await verifyUserByToken(token);
-  res.json({ message: 'User verified', ...result });
+  res.json(result);
 };
 
 export const me = async (req: AuthRequest, res: Response) => {
