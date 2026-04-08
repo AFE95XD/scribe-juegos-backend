@@ -261,6 +261,15 @@ export const getRegisteredUsers = async (params?: {
   };
 };
 
+export const getTotalUsersCount = async () => {
+  const [result] = await prisma.$queryRaw<Array<{ totalUsers: number }>>`
+    SELECT COUNT(*)::int AS "totalUsers"
+    FROM "User"
+  `;
+
+  return { totalUsers: result?.totalUsers ?? 0 };
+};
+
 export const getTicketsWithSignedUrls = async () => {
   const tickets = await prisma.ticket.findMany({
     include: { items: true, user: { select: { name: true, email: true } } },

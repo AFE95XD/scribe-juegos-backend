@@ -8,6 +8,7 @@ import {
   downloadWeeklyTickets,
   getLeaderboard,
   getRegisteredUsers,
+  getTotalUsersCount,
   getTicketsExportStatus,
   getTicketsWithSignedUrls,
   listAdmins,
@@ -31,6 +32,11 @@ export const registeredUsers = async (req: Request, res: Response) => {
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
   const data = await getRegisteredUsers({ startDate, endDate });
+  res.json(data);
+};
+
+export const usersCount = async (_req: Request, res: Response) => {
+  const data = await getTotalUsersCount();
   res.json(data);
 };
 

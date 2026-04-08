@@ -8,6 +8,7 @@ import {
   downloadWeeklyTicketsController,
   getAdministrators,
   registeredUsers,
+  usersCount,
   getTicketsExportStatusController,
   leaderboard,
   listTickets,
@@ -64,6 +65,7 @@ const router = Router();
  */
 router.get('/leaderboard', requireAuth, requireAdmin, leaderboard);
 router.get('/registered-users', requireAuth, requireAdmin, registeredUsers);
+router.get('/users/count', requireAuth, requireSuperAdmin, usersCount);
 
 /**
  * @openapi
