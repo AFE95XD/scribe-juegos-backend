@@ -5,6 +5,8 @@ import { env } from '../config/env';
 import { sendVerificationEmail, sendPasswordRecoveryEmail } from './email.service';
 import { sendVerificationWhatsApp, sendPasswordRecoveryWhatsApp } from './whatsapp.service';
 
+const INITIAL_SCRIBE_COINS = 5;
+
 export const registerUser = async (params: {
   name: string;
   postalCode?: string;
@@ -83,7 +85,8 @@ export const registerUser = async (params: {
       postalCode: params.postalCode,
       email: params.email,
       phone: params.phone,
-      passwordHash
+      passwordHash,
+      scribeCoins: INITIAL_SCRIBE_COINS
     }
   });
 
